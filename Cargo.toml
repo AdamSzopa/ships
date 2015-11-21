@@ -1,0 +1,4 @@
+[package]
+name = "ships"
+version = "0.1.0"
+authors = ["Adam Szopa"]

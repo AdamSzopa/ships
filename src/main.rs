@@ -11,13 +11,16 @@ enum Field{
 }
 
 fn main() {
-    let mut map = [Field::Empty;10];
-    map[3] = Field::Hit{ship: Ship{length:5,life_left:5}};
+    let mut map = [[Field::Empty;10];10];
+    map[3][2] = Field::Hit{ship: Ship{length:5,life_left:5}};
 
-    for elem in &map{
-        match *elem {
-            Field::Empty => print!(". "),
-            Field::Hit{ship} => print!("{} ",ship.life_left)
+    for (i,_) in map.iter().enumerate(){
+        for inner in &map[i]{
+            match *inner {
+                Field::Empty => print!(". "),
+                Field::Hit{ship} => print!("{} ",ship.life_left)
+            }
         }
+        println!("");
     }
 }

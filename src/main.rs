@@ -63,6 +63,23 @@ fn parse_coordinates(v: Vec<&str>)->Result<(u8,u8),String>{
     }
 }
 
+#[test]
+fn parsing_test(){
+    let mut input = vec!["1","2"];
+    assert_eq!(parse_coordinates(input),Ok((1,2)));
+
+    input = vec!["1","10"];
+    assert_eq!(parse_coordinates(input),Ok((1,10)));
+
+    input = vec!["-1","5"];
+    assert!(parse_coordinates(input).is_err());
+
+    input = vec!["d","6"];
+    assert!(parse_coordinates(input).is_err());
+
+    input = vec!["1"];
+    assert!(parse_coordinates(input).is_err());
+}
 
 fn main() {
     let mut map = [[Field{visited:false,ship:None};10];10];

@@ -1,7 +1,9 @@
-use std::rc::Rc;
+use std::option::Option;
+use std::io;
 
 #[derive (Copy,Clone)]
 struct Ship{
+    id: u8,
     length: i8,
     life_left: i8,
 }
@@ -13,48 +15,85 @@ impl Ship{
 }
 
 #[derive (Copy,Clone)]
-enum Field{
-    Empty,
-    Hit{ship: Ship},
+struct Field{
+    visited: bool,
+    ship: Option<i8>,
 }
 
-enum Field2{
-    Empty,
-    Hit{ship: Rc<Ship>},
+impl Field {
+    fn check(&mut self){
+        self.visited = true;
+    }
 }
+
+fn print_map(map: [[Field;10];10]){
+    for outer in map.iter(){
+        for inner in outer.iter(){
+            if inner.visited == false{
+                print!(". ");
+            }
+            else{
+                match inner.ship {
+                    None =>print!("_ "),
+                    Some(s) => print!("{} ",s),
+                }
+            }
+
+        }
+        println!("");
+    }
+}
+
+fn parse_coordinates(v: Vec<&str>)->Result<(u8,u8),String>{
+
+    if v.len() != 2{
+        Err("Please provide both coordinates.".to_owned())
+    }
+    else{
+
+        let x = v[0].parse::<i8>();
+        let y = v[1].parse::<i8>();
+
+        match (x,y){
+            (Err(_),_) => Err("The first coordinate is not a integer.".to_owned()),
+            (_,Err(_)) => Err("The second coordinate is not a integer.".to_owned()),
+            (Ok(x @ 1...10),Ok(y @ 1...10)) => Ok((x as u8,y as u8)),
+            _ => Err("Please use coordinates in the range 1-10.".to_owned()),
+        }
+    }
+}
+
 
 fn main() {
-    let mut map = [[Field::Empty;10];10];
+    let mut map = [[Field{visited:false,ship:None};10];10];
 
-    let mut ship7 = Ship{length:7,life_left:7};
-    let mut map2 = [[Field2::Empty,Field2::Hit{ship: Rc::new(ship7)},Field2::Empty],[Field2::Empty,Field2::Empty,Field2::Empty]];
+    let ship_array = [Ship{id:1,length:5,life_left:5}];
 
-    let ship5 = Ship{length:5,life_left:5};
-    map[3][2] = Field::Hit{ship: ship5};
-    map[3][3] = Field::Hit{ship: ship5};
+    let ship5 = Ship{id:1,length:5,life_left:5};
 
-        for outer in map.iter_mut(){
-            for inner in outer.iter_mut(){
-                match *inner {
-                    Field::Empty => print!(". "),
-                    Field::Hit{ref mut ship} => {
-                        ship.hit();
-                        print!("{} ",ship.life_left);
-                    }
-                }
-            }
-            println!("");
+    map[3][2] = Field{ship:Some(ship5.length),..map[3][2]};
+    map[3][3] = Field{ship:Some(ship5.length),..map[3][2]};
+
+
+    loop{
+        print_map(map);
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)
+        .ok()
+        .expect("failed to read line");
+println!("{}",input );
+        let v = input.trim().split_whitespace().take(2).collect::<Vec<&str>>();
+
+        match parse_coordinates(v){
+            Ok((x,y)) => map[(x-1) as usize][(y-1) as usize].check(),
+            Err(s) => println!("{}",s ),
         }
-        for outer in map2.iter_mut(){
-            for inner in outer.iter_mut(){
-                match *inner {
-                    Field2::Empty => print!(". "),
-                    Field2::Hit{ref mut ship} => {
-                        //ship.hit();
-                        print!("{} ",ship.life_left);
-                    }
-                }
-            }
-            println!("");
-        }
+    }
+
+
+
+
+
+
 }

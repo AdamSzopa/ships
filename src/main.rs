@@ -1,10 +1,8 @@
 extern crate rand;
-//extern crate ndarray;
 
 use std::option::Option;
 use std::io;
 use rand::Rng;
-//use ndarray::arr2;
 
 const MAP_WIDTH: usize = 5;
 const MAP_HEIGHT: usize = 5;
@@ -173,6 +171,7 @@ fn parsing_test(){
 fn main() {
     let mut map = [[Field{visited:false,ship:None};MAP_WIDTH];MAP_HEIGHT];
 
+//ship creation
     let create_list = vec![4,3,3,3,2];
     let mut ship_array:Vec<Ship> = Vec::new();
     let mut current_id = 0;
@@ -182,6 +181,7 @@ fn main() {
         current_id += 1;
     }
 
+//map setup
     let mut restarts = 0;
     'main_setup: loop{
         if restarts >= MAX_RESTARTS {
@@ -195,7 +195,7 @@ fn main() {
             while !s.emplace(&mut map){
                 iterations += 1;
                 if iterations >= MAX_ITERATIONS {
-                    println!("Couldn't put ship{} after {} tries. Starting over.",s.id,iterations);
+                    println!("Couldn't put ship{} after {} tries. Starting over.",s.length,iterations);
                     restarts += 1;
                     continue 'main_setup;
                 }

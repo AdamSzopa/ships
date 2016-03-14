@@ -1,74 +1,30 @@
 extern crate rand;
 
-
 use std::io;
 use rand::Rng;
 use std::rc::Rc;
+use std::cell::RefCell;
 use std::option::Option;
 
 const MAP_WIDTH: usize = 5;
 const MAP_HEIGHT: usize = 5;
-const MAX_ITERATIONS:u32 = 10;
-const MAX_RESTARTS:u32 = 10;
+const MAX_ITERATIONS:u32 = 10; //max amount of tries to put a ship on the map
+const MAX_RESTARTS:u32 = 10;   //max amount of tries to create a valid map
 
-type MAP = ([[Field;MAP_WIDTH];MAP_HEIGHT]);
+type MAP = ([[Field;MAP_WIDTH];MAP_HEIGHT]); //yeah, MAP is much nicer looking
 
-#[derive(Copy,Clone)]
 struct Ship{
     id: u8,
     length: u8,
     life_left: u8,
 }
 
+struct Field{
+    visited: bool,
+    ship: Option<Rc<RefCell<Ship>>>, //there must be a better way
+}
+
 impl Ship{
-    fn emplace(self,map: &mut MAP)->bool{
-
-        let mut rng = rand::thread_rng();
-
-        let (x,y);
-        //let candidate_area;
-        let temp = Some(Rc::new(self));
-
-        if rng.gen() { //make it vertical
-            x = rng.gen_range(0, MAP_WIDTH-self.length as usize);
-            y = rng.gen_range(0, MAP_HEIGHT);
-            println!("vertical - x: {}, y: {}",x,y );
-
-            //check if all fields are empty
-            for check_x in x..x+self.length as usize{
-                match map[check_x][y].ship {
-                    Some(_) => return false,
-                    None => {},
-                }
-            }
-
-            for check_x in x..x+self.length as usize{
-                map[check_x][y].ship = temp.clone();
-                println!("placing ship {} at {} {}",self.id,check_x,y);
-            }
-
-        }
-        else {//make it horizontal
-            x = rng.gen_range(0, MAP_WIDTH);
-            y = rng.gen_range(0, MAP_HEIGHT-self.length as usize);
-            println!("horizontal - x: {}, y: {}",x,y );
-
-        //check if all fields are empty
-            for check_y in y..y+self.length as usize{
-                match map[x][check_y].ship {
-                    Some(_) => return false,
-                    None => {},
-                }
-            }
-
-            for check_y in y..y+self.length as usize{
-                map[x][check_y].ship = temp.clone();
-                println!("placing ship {} at {} {}",self.id,x,check_y);
-            }
-        }
-        true
-    }
-
     fn new(id: u8,size: u8)->Ship{
         let s = Ship{id:id,length:size,life_left:size};
         s
@@ -80,11 +36,49 @@ impl Ship{
     }
 }
 
-struct Field{
-    visited: bool,
-    ship: Option<Rc<Ship>>,
-}
+fn place_on_map(map: &mut MAP,ship_rc_refcell: &Rc<RefCell<Ship>>)->bool{
 
+    let mut rng = rand::thread_rng();
+
+    let (x,y);
+    let ship_rc = ship_rc_refcell.borrow();
+
+//I would LOVE to fold this into a single codepath somehow:
+
+    if rng.gen() { //make it vertical
+        x = rng.gen_range(0, MAP_WIDTH-ship_rc.length as usize);
+        y = rng.gen_range(0, MAP_HEIGHT);
+
+        //check if all fields are empty
+        for check_x in x..x+ship_rc.length as usize{
+            if let Some(_) = map[check_x][y].ship{
+                return false;
+            }
+        }
+        //place the ship
+        for check_x in x..x+ship_rc.length as usize{
+            map[check_x][y].ship = Some(ship_rc_refcell.clone());
+        }
+
+    }
+    else {//make it horizontal
+        x = rng.gen_range(0, MAP_WIDTH);
+        y = rng.gen_range(0, MAP_HEIGHT-ship_rc.length as usize);
+
+    //check if all fields are empty
+        for check_y in y..y+ship_rc.length as usize{
+            if let Some(_) = map[x][check_y].ship{
+                return false;
+            }
+        }
+        //place the ship
+        for check_y in y..y+ship_rc.length as usize{
+            map[x][check_y].ship = Some(ship_rc_refcell.clone());
+        }
+    }
+    true
+}
+//Without this initializing the map in main would be a PitA
 impl Default for Field{
     fn default() -> Self {
         Field { visited: false, ship: None, }
@@ -97,11 +91,10 @@ impl Field {
             self.visited = true;
 
             if let Some(ref mut x) = self.ship{
-                x.hit();
-                /*-match Rc::make_mut(x).hit(){
+                match x.borrow_mut().hit(){
                     0 => println!("Hit and sunk!"),
                     _ => println!("Hit!"),
-                }*/
+                }
             }
             else{
                 println!("Miss!");
@@ -122,7 +115,8 @@ fn print_map(map: &MAP){
             else{
                 match inner.ship {
                     None =>print!("_ "),
-                    Some(ref s) => print!("{} ",s.length),
+                    Some(ref s) if s.borrow().life_left > 0 => print!("{} ",s.borrow().id),
+                    _ => print!("* "),
                 }
             }
 
@@ -154,7 +148,8 @@ fn parse_coordinates(v: Vec<&str>)->Result<(u8,u8),String>{
             (Err(_),_) => Err("The first coordinate is not a integer.".to_owned()),
             (_,Err(_)) => Err("The second coordinate is not a integer.".to_owned()),
             (Ok(x @ 1...MAP_WIDTH),Ok(y @ 1...MAP_HEIGHT)) => Ok((x as u8,y as u8)),
-            _ => Err(format!{"Please use coordinates in the range 1-{}",MAP_WIDTH}.to_owned()), //TODO: make this error msg change depending on map size.
+            _ => Err(format!{"Please use coordinates in the range 1-{}",MAP_WIDTH}.to_owned()),
+            //TODO: the above error will not be true if MAP_WIDTH!=MAP_HEIGHT.
         }
     }
 }
@@ -164,8 +159,8 @@ fn parsing_test(){
     let mut input = vec!["1","2"];
     assert_eq!(parse_coordinates(input),Ok((1,2)));
 
-    input = vec!["1","10"];
-    assert_eq!(parse_coordinates(input),Ok((1,10)));
+    input = vec!["1","5"];
+    assert_eq!(parse_coordinates(input),Ok((1,5)));
 
     input = vec!["-1","5"];
     assert!(parse_coordinates(input).is_err());
@@ -178,23 +173,22 @@ fn parsing_test(){
 }
 
 fn main() {
-    let mut map : [[Field;MAP_WIDTH];MAP_HEIGHT] = Default::default();
-
+    let mut map: [[Field;MAP_WIDTH];MAP_HEIGHT] = Default::default(); //thank Amon-Ra for default()
 
 //ship creation
     let create_list = vec![4,3,3,3,2];
-    let mut ship_array:Vec<Ship> = Vec::new();
+    let mut ship_array:Vec<Rc<RefCell<Ship>>> = Vec::with_capacity(create_list.len());//such opimaz
     let mut current_id = 0;
 
     for size in create_list{
-        ship_array.push(Ship::new(current_id, size));
+        ship_array.push(Rc::new(RefCell::new(Ship::new(current_id, size))));//a mouth full, isnt it
         current_id += 1;
     }
 
 //map setup
     let mut restarts = 0;
     'main_setup: loop{
-        if restarts >= MAX_RESTARTS {
+        if restarts >= MAX_RESTARTS { //wasn't able to put all the ships. Reduce create_list?
             panic!("Couldn't place ships after {} restarts. Aborting game",restarts);
         }
         clear_map(&mut map);
@@ -202,12 +196,13 @@ fn main() {
 
         for s in &ship_array{
             iterations = 0;
-            while !s.emplace(&mut map){
+            while !place_on_map(&mut map, s){
                 iterations += 1;
-                if iterations >= MAX_ITERATIONS {
-                    println!("Couldn't put ship{} after {} tries. Starting over.",s.length,iterations);
+                if iterations >= MAX_ITERATIONS {// could not find a free space for the ship
+                    println!("Couldn't put ship{} after {} tries. Starting over."
+                        ,s.borrow().length,iterations);
                     restarts += 1;
-                    continue 'main_setup;
+                    continue 'main_setup; //Nah, that's not a GOTO, nope.
                 }
             }
         }
@@ -216,6 +211,10 @@ fn main() {
 
 //main game loop
     loop{
+        ship_array.iter()
+            .position(|n| n.borrow().life_left <= 0)
+            .map(|e|ship_array.remove(e))
+            .is_some(); //AKA BLACK MAGIC
 
         let left = ship_array.len();
         if left > 0{
@@ -234,11 +233,10 @@ fn main() {
         .expect("failed to read line");
 
         let v = input.trim().split_whitespace().take(2).collect::<Vec<&str>>();
-
+        //If I could do even more parsing on the line above, maybe parse_coordinates could be cut?
         match parse_coordinates(v){
-            Ok((x,y)) => map[(x-1) as usize][(y-1) as usize].check(),
+            Ok((y,x)) => map[(x-1) as usize][(y-1) as usize].check(),
             Err(s) => println!("{}",s ),
         }
-        //println!("{:?}", map);
     }
 }

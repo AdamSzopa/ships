@@ -96,7 +96,10 @@ impl Default for Field{
 
 impl Field {
     fn check(&mut self){
-        if !self.visited{
+        if self.visited{
+            println!("Already shot here, try again.");
+        }
+        else{
             self.visited = true;
 
             if let Some(ref mut x) = self.ship{
@@ -109,26 +112,22 @@ impl Field {
                 println!("Miss!");
             }
         }
-        else{
-            println!("Already shot here, try again.");
-        }
     }
 }
 
 fn print_map(map: &MAP){
     for outer in map.iter(){
         for inner in outer.iter(){
-            if !inner.visited{
-                print!(". ");
-            }
-            else{
+            if inner.visited{
                 match inner.ship {
                     None =>print!("_ "),
                     Some(ref s) if s.borrow().life_left > 0 => print!("{} ",s.borrow().id),
                     _ => print!("* "),
                 }
             }
-
+            else{
+                print!(". ");
+            }
         }
         println!("");
     }
@@ -205,7 +204,7 @@ fn main() {
             iterations = 0;
             while !place_on_map(&mut map, s){
                 iterations += 1;
-                if iterations > MAX_ITERATIONS {// could not find a free space for the ship
+                if iterations >= MAX_ITERATIONS {// could not find a free space for the ship
                     println!("Couldn't put ship{} after {} tries. Starting over."
                         ,s.borrow().length,iterations);
                     restarts += 1;
@@ -219,7 +218,7 @@ fn main() {
 //main game loop
     loop{
         ship_array.iter()//Remove any "dead" ships
-            .position(|n| n.borrow().life_left <= 0)
+            .position(|n| n.borrow().life_left == 0)
             .map(|e|ship_array.remove(e))
             .is_some(); //AKA BLACK MAGIC
 

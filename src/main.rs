@@ -1,8 +1,10 @@
 extern crate rand;
 
-use std::option::Option;
+
 use std::io;
 use rand::Rng;
+use std::rc::Rc;
+use std::option::Option;
 
 const MAP_WIDTH: usize = 5;
 const MAP_HEIGHT: usize = 5;
@@ -11,7 +13,7 @@ const MAX_RESTARTS:u32 = 10;
 
 type MAP = ([[Field;MAP_WIDTH];MAP_HEIGHT]);
 
-#[derive (Copy,Clone)]
+#[derive(Copy,Clone)]
 struct Ship{
     id: u8,
     length: u8,
@@ -19,18 +21,18 @@ struct Ship{
 }
 
 impl Ship{
-    fn emplace(&self,map: &mut MAP)->bool{
+    fn emplace(self,map: &mut MAP)->bool{
 
         let mut rng = rand::thread_rng();
 
         let (x,y);
         //let candidate_area;
+        let temp = Some(Rc::new(self));
 
         if rng.gen() { //make it vertical
             x = rng.gen_range(0, MAP_WIDTH-self.length as usize);
             y = rng.gen_range(0, MAP_HEIGHT);
             println!("vertical - x: {}, y: {}",x,y );
-            //candidate_area = &mut map[x..x+self.length as usize][y];
 
             //check if all fields are empty
             for check_x in x..x+self.length as usize{
@@ -41,7 +43,7 @@ impl Ship{
             }
 
             for check_x in x..x+self.length as usize{
-                map[check_x][y].ship = Some(self.id);
+                map[check_x][y].ship = temp.clone();
                 println!("placing ship {} at {} {}",self.id,check_x,y);
             }
 
@@ -50,7 +52,6 @@ impl Ship{
             x = rng.gen_range(0, MAP_WIDTH);
             y = rng.gen_range(0, MAP_HEIGHT-self.length as usize);
             println!("horizontal - x: {}, y: {}",x,y );
-        //    candidate_area = &mut map[x][y..y+self.length as usize];
 
         //check if all fields are empty
             for check_y in y..y+self.length as usize{
@@ -61,7 +62,7 @@ impl Ship{
             }
 
             for check_y in y..y+self.length as usize{
-                map[x][check_y].ship = Some(self.id);
+                map[x][check_y].ship = temp.clone();
                 println!("placing ship {} at {} {}",self.id,x,check_y);
             }
         }
@@ -72,39 +73,47 @@ impl Ship{
         let s = Ship{id:id,length:size,life_left:size};
         s
     }
-/*    fn hit(&mut self){
+    fn hit(&mut self)->u8{
         self.life_left -= 1;
-    }*/
+        println!("LIFE LEFT: {}",self.life_left );
+        self.life_left
+    }
 }
 
-
-#[derive (Copy,Clone,Debug)]
 struct Field{
     visited: bool,
-    ship: Option<u8>,
+    ship: Option<Rc<Ship>>,
+}
+
+impl Default for Field{
+    fn default() -> Self {
+        Field { visited: false, ship: None, }
+    }
 }
 
 impl Field {
     fn check(&mut self){
         if self.visited == false{
             self.visited = true;
-            /*if let Some(s) = self.ship{
-                s.life_left -= 1;
-                if s.life_left == 0{
-                    println!("Hit ads sunk!");
-                }
-                else{
-                    println!("Hit!");
-                }
+
+            if let Some(ref mut x) = self.ship{
+                x.hit();
+                /*-match Rc::make_mut(x).hit(){
+                    0 => println!("Hit and sunk!"),
+                    _ => println!("Hit!"),
+                }*/
             }
             else{
                 println!("Miss!");
-            }*/
+            }
+        }
+        else{
+            println!("Already shot here, try again.");
         }
     }
 }
 
-fn print_map(map: MAP){
+fn print_map(map: &MAP){
     for outer in map.iter(){
         for inner in outer.iter(){
             if inner.visited == false{
@@ -113,7 +122,7 @@ fn print_map(map: MAP){
             else{
                 match inner.ship {
                     None =>print!("_ "),
-                    Some(s) => print!("{} ",s),
+                    Some(ref s) => print!("{} ",s.length),
                 }
             }
 
@@ -169,7 +178,8 @@ fn parsing_test(){
 }
 
 fn main() {
-    let mut map = [[Field{visited:false,ship:None};MAP_WIDTH];MAP_HEIGHT];
+    let mut map : [[Field;MAP_WIDTH];MAP_HEIGHT] = Default::default();
+
 
 //ship creation
     let create_list = vec![4,3,3,3,2];
@@ -216,7 +226,7 @@ fn main() {
             break;
         }
 
-        print_map(map);
+        print_map(&map);
 
         let mut input = String::new();
         io::stdin().read_line(&mut input)

@@ -26,8 +26,7 @@ struct Field{
 
 impl Ship{
     fn new(id: u8,size: u8)->Ship{
-        let s = Ship{id:id,length:size,life_left:size};
-        s
+        Ship{id:id,length:size,life_left:size}
     }
     fn hit(&mut self)->u8{
         self.life_left -= 1;
@@ -50,15 +49,25 @@ fn place_on_map(map: &mut MAP,ship_rc_refcell: &Rc<RefCell<Ship>>)->bool{
         y = rng.gen_range(0, MAP_HEIGHT);
 
         //check if all fields are empty
-        for check_x in x..x+ship_rc.length as usize{
+        for item in map.iter().take(x+ship_rc.length as usize).skip(x){
+            if let Some(_) = item[y].ship{
+                return false;
+            }
+        } //Following is the version the above code that Clippy didn't like:
+        /*for check_x in x..x+ship_rc.length as usize{
             if let Some(_) = map[check_x][y].ship{
                 return false;
             }
-        }
+        }*/
         //place the ship
-        for check_x in x..x+ship_rc.length as usize{
-            map[check_x][y].ship = Some(ship_rc_refcell.clone());
+
+        for item in map.iter_mut().take(x+ship_rc.length as usize).skip(x){
+            item[y].ship = Some(ship_rc_refcell.clone());
         }
+        //Again, Clippy didn't like this version:
+        /*for check_x in x..x+ship_rc.length as usize{
+            map[check_x][y].ship = Some(ship_rc_refcell.clone());
+        }*/
 
     }
     else {//make it horizontal
@@ -87,7 +96,7 @@ impl Default for Field{
 
 impl Field {
     fn check(&mut self){
-        if self.visited == false{
+        if !self.visited{
             self.visited = true;
 
             if let Some(ref mut x) = self.ship{
@@ -109,7 +118,7 @@ impl Field {
 fn print_map(map: &MAP){
     for outer in map.iter(){
         for inner in outer.iter(){
-            if inner.visited == false{
+            if !inner.visited{
                 print!(". ");
             }
             else{
@@ -136,11 +145,7 @@ fn clear_map(map: &mut MAP){
 
 fn parse_coordinates(v: Vec<&str>)->Result<(u8,u8),String>{
 
-    if v.len() != 2{
-        Err("Please provide both coordinates.".to_owned())
-    }
-    else{
-
+    if v.len() == 2{
         let x = v[0].parse::<usize>();
         let y = v[1].parse::<usize>();
 
@@ -152,6 +157,9 @@ fn parse_coordinates(v: Vec<&str>)->Result<(u8,u8),String>{
             //TODO: the above error will not be true if MAP_WIDTH!=MAP_HEIGHT.
         }
     }
+    else{
+            Err("Please provide both coordinates.".to_owned())
+        }
 }
 
 #[test]
@@ -178,11 +186,10 @@ fn main() {
 //ship creation
     let create_list = vec![4,3,3,3,2];
     let mut ship_array:Vec<Rc<RefCell<Ship>>> = Vec::with_capacity(create_list.len());//such opimaz
-    let mut current_id = 0;
 
-    for size in create_list{
-        ship_array.push(Rc::new(RefCell::new(Ship::new(current_id, size))));//a mouth full, isnt it
-        current_id += 1;
+    for (current_id, item) in create_list.iter().enumerate(){
+        ship_array.push(Rc::new(RefCell::new(Ship::new(current_id as u8, *item))));
+        //a mouth full, isnt it?
     }
 
 //map setup
@@ -198,7 +205,7 @@ fn main() {
             iterations = 0;
             while !place_on_map(&mut map, s){
                 iterations += 1;
-                if iterations >= MAX_ITERATIONS {// could not find a free space for the ship
+                if iterations > MAX_ITERATIONS {// could not find a free space for the ship
                     println!("Couldn't put ship{} after {} tries. Starting over."
                         ,s.borrow().length,iterations);
                     restarts += 1;
@@ -211,7 +218,7 @@ fn main() {
 
 //main game loop
     loop{
-        ship_array.iter()
+        ship_array.iter()//Remove any "dead" ships
             .position(|n| n.borrow().life_left <= 0)
             .map(|e|ship_array.remove(e))
             .is_some(); //AKA BLACK MAGIC
@@ -229,7 +236,6 @@ fn main() {
 
         let mut input = String::new();
         io::stdin().read_line(&mut input)
-        .ok()
         .expect("failed to read line");
 
         let v = input.trim().split_whitespace().take(2).collect::<Vec<&str>>();

@@ -225,6 +225,13 @@ fn main() {
         break;
     }
 
+    //let's explain the rules.
+    println!("There are ships hidden in the map below.");
+    println!("If you hit one, it will display it's ID.");
+    println!("If you destroy a ship, it will display '*' instead.");
+    println!("A miss is marked as '_'.");
+    println!("Provide input as coordinates divaded by space, ex. '2 3'");
+    println!("The game will end when all ships are destoyed. Good luck!");
     // main game loop
     loop {
         ship_array.iter()//Remove any "dead" ships

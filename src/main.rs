@@ -3,7 +3,7 @@ extern crate rand;
 use std::io;
 use rand::Rng;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::option::Option;
 
 const MAP_WIDTH: usize = 5;
@@ -16,12 +16,12 @@ type Map = ([[Field; MAP_WIDTH]; MAP_HEIGHT]); //yeah, Map is much nicer looking
 struct Ship {
     id: u8,
     length: u8,
-    life_left: u8,
+    life_left: Cell<u8>,
 }
 
 struct Field {
     visited: bool,
-    ship: Option<Rc<RefCell<Ship>>>, // there must be a better way
+    ship: Option<Rc<Ship>>, // there must be a better way
 }
 
 impl Ship {
@@ -29,70 +29,43 @@ impl Ship {
         Ship {
             id: id,
             length: size,
-            life_left: size,
+            life_left: Cell::new(size),
         }
     }
-    fn hit(&mut self) -> u8 {
-        self.life_left -= 1;
-        println!("LIFE LEFT: {}", self.life_left);
-        self.life_left
+    fn hit(&self) -> u8 {
+        self.life_left.set(self.life_left.get() - 1);
+        println!("LIFE LEFT: {}", self.life_left.get());
+        self.life_left.get()
     }
 }
 
-fn place_on_map(map: &mut Map, ship_rc_refcell: &Rc<RefCell<Ship>>) -> bool {
+fn place_on_map(map: &mut Map, ship: &Rc<Ship>) -> bool {
+    use std::iter::repeat;
 
+    let len = ship.length as usize;
     let mut rng = rand::thread_rng();
 
-    let (x, y);
-    let ship_rc = ship_rc_refcell.borrow();
-
-    // I would LOVE to fold this into a single codepath somehow:
-
-    if rng.gen() {
-        // make it vertical
-        x = rng.gen_range(0, MAP_WIDTH - ship_rc.length as usize);
-        y = rng.gen_range(0, MAP_HEIGHT);
-
-        // check if all fields are empty
-        for item in map.iter().take(x + ship_rc.length as usize).skip(x) {
-            if let Some(_) = item[y].ship {
-                return false;
-            }
-        } //Following is the version the above code that Clippy didn't like:
-        /*for check_x in x..x+ship_rc.length as usize{
-            if let Some(_) = map[check_x][y].ship{
-                return false;
-            }
-        }*/
-        // place the ship
-
-        for item in map.iter_mut().take(x + ship_rc.length as usize).skip(x) {
-            item[y].ship = Some(ship_rc_refcell.clone());
-        }
-        // Again, Clippy didn't like this version:
-        // for check_x in x..x+ship_rc.length as usize{
-        // map[check_x][y].ship = Some(ship_rc_refcell.clone());
-        // }
-
-
+    let shape: Vec<(usize, usize)> = if rng.gen() {
+        let x = rng.gen_range(0, MAP_WIDTH - len);
+        let y = rng.gen_range(0, MAP_HEIGHT);
+        (x..).zip(repeat(y)).take(len).collect()
     } else {
-        // make it horizontal
-        x = rng.gen_range(0, MAP_WIDTH);
-        y = rng.gen_range(0, MAP_HEIGHT - ship_rc.length as usize);
+        let x = rng.gen_range(0, MAP_WIDTH);
+        let y = rng.gen_range(0, MAP_HEIGHT - len);
+        repeat(x).zip(y..).take(len).collect()
+    };
 
-        // check if all fields are empty
-        for check_y in y..y + ship_rc.length as usize {
-            if let Some(_) = map[x][check_y].ship {
-                return false;
-            }
+    if shape.iter().all(|&(x,y)| map[x][y].ship.is_none())  {
+        for &(x, y) in &shape {
+            map[x][y].ship = Some(ship.clone());
         }
-        // place the ship
-        for check_y in y..y + ship_rc.length as usize {
-            map[x][check_y].ship = Some(ship_rc_refcell.clone());
-        }
+        true
     }
-    true
+    else {
+        false
+    }
 }
+
 // Without this initializing the map in main would be a PitA
 impl Default for Field {
     fn default() -> Self {
@@ -110,8 +83,8 @@ impl Field {
         } else {
             self.visited = true;
 
-            if let Some(ref mut x) = self.ship {
-                match x.borrow_mut().hit() {
+            if let Some(ref x) = self.ship {
+                match x.hit() {
                     0 => println!("Hit and sunk!"),
                     _ => println!("Hit!"),
                 }
@@ -128,7 +101,7 @@ fn print_map(map: &Map) {
             if inner.visited {
                 match inner.ship {
                     None => print!("_ "),
-                    Some(ref s) if s.borrow().life_left > 0 => print!("{} ", s.borrow().id),
+                    Some(ref s) if s.life_left.get() > 0 => print!("{} ", s.id),
                     _ => print!("* "),
                 }
             } else {
@@ -148,7 +121,7 @@ fn clear_map(map: &mut Map) {
     }
 }
 
-fn parse_coordinates(v: Vec<&str>) -> Result<(u8, u8), String> {
+fn parse_coordinates(v: &[&str]) -> Result<(u8, u8), String> {
 
     if v.len() == 2 {
         let x = v[0].parse::<usize>();
@@ -168,20 +141,20 @@ fn parse_coordinates(v: Vec<&str>) -> Result<(u8, u8), String> {
 
 #[test]
 fn parsing_test() {
-    let mut input = vec!["1", "2"];
-    assert_eq!(parse_coordinates(input), Ok((1, 2)));
+    let input = ["1", "2"];
+    assert_eq!(parse_coordinates(&input), Ok((1, 2)));
 
-    input = vec!["1", "5"];
-    assert_eq!(parse_coordinates(input), Ok((1, 5)));
+    let input = ["1", "5"];
+    assert_eq!(parse_coordinates(&input), Ok((1, 5)));
 
-    input = vec!["-1", "5"];
-    assert!(parse_coordinates(input).is_err());
+    let input = ["-1", "5"];
+    assert!(parse_coordinates(&input).is_err());
 
-    input = vec!["d", "6"];
-    assert!(parse_coordinates(input).is_err());
+    let input = ["d", "6"];
+    assert!(parse_coordinates(&input).is_err());
 
-    input = vec!["1"];
-    assert!(parse_coordinates(input).is_err());
+    let input = ["1"];
+    assert!(parse_coordinates(&input).is_err());
 }
 
 fn main() {
@@ -189,13 +162,13 @@ fn main() {
     // thank Amon-Ra for default()
 
     // ship creation
-    let create_list = vec![4, 3, 3, 3, 2];
-    let mut ship_array: Vec<Rc<RefCell<Ship>>> = Vec::with_capacity(create_list.len());//such opimaz
-
-    for (current_id, item) in create_list.iter().enumerate() {
-        ship_array.push(Rc::new(RefCell::new(Ship::new(current_id as u8, *item))));
-        // a mouth full, isnt it?
-    }
+    let mut ship_array: Vec<Rc<Ship>> = [4, 3, 3, 3, 2]
+        .iter().cloned()
+        .enumerate()
+        .map(|(current_id, len)| {
+            Rc::new(Ship::new(current_id as u8, len))
+        })
+        .collect();
 
     // map setup
     let mut restarts = 0;
@@ -215,7 +188,7 @@ fn main() {
                 if iterations >= MAX_ITERATIONS {
                     // could not find a free space for the ship
                     println!("Couldn't put ship{} after {} tries. Starting over.",
-                             s.borrow().length,
+                             s.length,
                              iterations);
                     restarts += 1;
                     continue 'main_setup; //Nah, that's not a GOTO, nope.
@@ -235,7 +208,7 @@ fn main() {
     // main game loop
     loop {
         ship_array.iter()//Remove any "dead" ships
-            .position(|n| n.borrow().life_left == 0)
+            .position(|n| n.life_left.get() == 0)
             .map(|e|ship_array.remove(e))
             .is_some(); //AKA BLACK MAGIC
 
@@ -256,7 +229,7 @@ fn main() {
 
         let v = input.trim().split_whitespace().take(2).collect::<Vec<&str>>();
         // If I could do even more parsing on the line above, maybe parse_coordinates could be cut?
-        match parse_coordinates(v) {
+        match parse_coordinates(&v) {
             Ok((y, x)) => map[(x - 1) as usize][(y - 1) as usize].check(),
             Err(s) => println!("{}", s),
         }

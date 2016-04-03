@@ -209,8 +209,8 @@ fn main() {
     loop {
         ship_array.iter()//Remove any "dead" ships
             .position(|n| n.life_left.get() == 0)
-            .map(|e|ship_array.remove(e))
-            .is_some(); //AKA BLACK MAGIC
+            .map(|e|ship_array.remove(e));
+        //    .is_some(); //AKA BLACK MAGIC
 
         let left = ship_array.len();
         if left > 0 {
